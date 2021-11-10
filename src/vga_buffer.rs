@@ -108,6 +108,9 @@ impl Writer {
             }
         }
     }
+
+    #[allow(dead_code)]
+    fn move_cursor() {}
     fn scrollback(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {

@@ -12,5 +12,10 @@
 		"rust.sysroot": "E:/Programmemeing/ost/target/sysroot",
 		"rust.rustflags": "-L dependency=E:/Programmemeing/ost/target/sysroot/lib/rustlib/x86_64-unknown-none/lib",
 		//"rust-client.engine": "rust-analyzer"
+		/*"rust-analyzer.checkOnSave.extraArgs": [
+			"-Z",
+			"build-std=core"
+		],*/
+		//"rust-analyzer.cargo.target": "x86_64-unknown-none.json"
 	}
 }

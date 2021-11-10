@@ -4,10 +4,12 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![feature(alloc_error_handler)]
 
 extern crate alloc;
 #[macro_use]
 pub mod macros;
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -22,7 +24,7 @@ use core::panic::PanicInfo;
 pub extern "C" fn _start() -> ! {
     init();
     test_main();
-    loop {}
+    hlt_loop();
 }
 
 #[cfg(test)]
@@ -32,12 +34,13 @@ fn panic(info: &PanicInfo) -> ! {
 }
 
 pub fn init() {
-    unsafe { // cursor-disabling magic
+    unsafe {
+        // cursor-disabling magic
         use x86_64::instructions::port::Port;
         let mut port1 = Port::new(0x3d4);
-        port1.write(0b00001010 as u8);
+        port1.write(0b00001010_u8);
         let mut port2 = Port::new(0x3d5);
-        port2.write(0b00100000 as u8)
+        port2.write(0b00100000_u8)
     }
     gdt::init();
     interrupts::init_idt();

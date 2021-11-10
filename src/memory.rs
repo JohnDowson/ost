@@ -1,5 +1,6 @@
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 use x86_64::registers::control::Cr3;
+#[allow(unused_imports)]
 use x86_64::structures::paging::{
     page_table::FrameError, FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame,
     Size4KiB,
@@ -11,7 +12,7 @@ unsafe fn active_l4_table(physical_memory_offset: VirtAddr) -> &'static mut Page
     let phys = l4_table_frame.start_address();
     let virt = physical_memory_offset + phys.as_u64();
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
-    return &mut *page_table_ptr;
+    &mut *page_table_ptr
 }
 
 pub struct BootInfoFrameAllocator {
@@ -20,6 +21,7 @@ pub struct BootInfoFrameAllocator {
 }
 
 impl BootInfoFrameAllocator {
+    #[allow(clippy::clippy::missing_safety_doc)]
     pub unsafe fn init(memory_map: &'static MemoryMap) -> BootInfoFrameAllocator {
         BootInfoFrameAllocator {
             memory_map,
@@ -40,17 +42,15 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
         let frame = self.usable_frames().nth(self.next);
         self.next += 1;
-        return frame;
+        frame
     }
 }
 
-pub unsafe fn translate_address(
-    address: VirtAddr,
-    physical_memory_offset: VirtAddr,
-) -> Option<PhysAddr> {
+pub fn translate_address(address: VirtAddr, physical_memory_offset: VirtAddr) -> Option<PhysAddr> {
     _translate_address(address, physical_memory_offset)
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     let l4_table = active_l4_table(physical_memory_offset);
     OffsetPageTable::new(l4_table, physical_memory_offset)
