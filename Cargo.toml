@@ -2,33 +2,13 @@
 name = "ost"
 version = "0.1.0"
 authors = ["John Dowson <dowson.john.pony@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [dependencies]
-volatile = "0.2"
-spin = "*"
-x86_64 = "0.13"
-uart_16550 = "*"
-pic8259_simple = "*"
-pc-keyboard = "*"
-[dependencies.bootloader]
-version = "*"
-features = ["map_physical_memory"]
-[dependencies.lazy_static]
-version = "*"
-features = ["spin_no_std"]
-
-
-[package.metadata.bootimage]
-# The command invoked with the created bootimage (the "{}" will be replaced
-# with the path to the bootable disk image)
-# Applies to `bootimage run` and `bootimage runner`
-run-command = [
-    "C:/Program Files/qemu/qemu-system-x86_64.exe",
-    "-drive",
-    "format=raw,file={}",
-]
-test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio"]
-test-success-exit-code = 33
+bootloader = "0.9.8"
