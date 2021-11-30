@@ -1,15 +1,22 @@
 #![allow(clippy::empty_loop)]
 #![no_std]
 #![cfg_attr(test, no_main)]
+#![feature(box_syntax)]
 #![feature(custom_test_frameworks)]
+#![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #[macro_use]
 extern crate lazy_static;
+extern crate alloc;
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
+pub mod memory;
 pub mod serial;
+pub mod task;
+pub mod thread;
 pub mod vga;
 use core::panic::PanicInfo;
 
@@ -50,10 +57,13 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
         port.write(exit_code as u32);
     }
 }
-
+#[cfg(test)]
+use bootloader::{entry_point, BootInfo};
+#[cfg(test)]
+entry_point!(test_kmain);
 #[cfg(test)]
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub fn test_kmain(_boot_info: &'static BootInfo) -> ! {
     init();
     test_main();
     halt()
@@ -84,4 +94,9 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
     serial_println!("Error: {}\n", info);
     exit_qemu(QemuExitCode::Failed);
     halt()
+}
+
+#[alloc_error_handler]
+fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
+    panic!("allocation error: {:?}", layout)
 }

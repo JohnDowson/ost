@@ -1,8 +1,10 @@
-use crate::{gdt, print, println};
-use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use crate::{gdt, halt, println};
 use pic8259::ChainedPics;
 use spin::Mutex;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use x86_64::{
+    registers::control::Cr2,
+    structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
+};
 
 pub const PIC1_OFFSET: u8 = 32;
 pub const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
@@ -21,8 +23,14 @@ lazy_static! {
         }
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt);
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt);
+        idt.page_fault.set_handler_fn(page_fault);
+        idt.overflow.set_handler_fn(overflow);
         idt
     };
+}
+
+extern "x86-interrupt" fn overflow(stack_frame: InterruptStackFrame) {
+    println!("Overflow\n{:#?}", stack_frame)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,7 +62,20 @@ extern "x86-interrupt" fn double_fault(stack_frame: InterruptStackFrame, error_c
         "EXCEPTION: DOUBLE FAULT #{}\n{:#?}",
         error_code, stack_frame
     );
-    loop {}
+    halt()
+}
+
+extern "x86-interrupt" fn page_fault(
+    stack_frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    println!(
+        "EXCEPTION: PAGE FAULT @ {:?}\nError code: {:?}\n{:#?}",
+        Cr2::read(),
+        error_code,
+        stack_frame
+    );
+    halt()
 }
 
 extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStackFrame) {
@@ -66,24 +87,11 @@ extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStackFrame) {
 
 extern "x86-interrupt" fn keyboard_interrupt(_stack_frame: InterruptStackFrame) {
     use x86_64::instructions::port::Port;
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
-            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
-        );
-    }
 
-    let mut keyboard = KEYBOARD.lock();
     let mut port = Port::new(0x60);
-
     let scancode: u8 = unsafe { port.read() };
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
-    }
+    crate::task::keyboard::add_scancode(scancode);
+
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());

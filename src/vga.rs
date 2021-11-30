@@ -90,6 +90,7 @@ impl Writer {
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
+                0x08 => self.rub_one_out(),
                 // printable ASCII byte or newline
                 0x20..=0x7e | b'\n' => self.write_byte(byte),
                 // not part of printable ASCII range
@@ -108,7 +109,6 @@ impl Writer {
 
                 let row = BUFFER_HEIGHT - 1;
                 let col = self.column_position;
-
                 let color_code = self.color_code;
                 self.buffer.chars[row][col].write(ScreenChar {
                     ascii_character: byte,
@@ -130,18 +130,37 @@ impl Writer {
         self.column_position = 0;
     }
 
+    fn blank(&self) -> ScreenChar {
+        ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        }
+    }
+
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',
             color_code: self.color_code,
         };
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            self.buffer.chars[row][col].write(self.blank());
         }
+    }
+
+    fn rub_one_out(&mut self) {
+        if self.column_position >= 1 {
+            let row = BUFFER_HEIGHT - 1;
+            let col = self.column_position - 1;
+            self.buffer.chars[row][col].write(self.blank());
+            self.column_position -= 1;
+        }
+        serial_println!("col: {}", self.column_position);
     }
 }
 
 use core::fmt;
+
+use crate::serial_println;
 
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
