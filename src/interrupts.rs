@@ -1,7 +1,8 @@
-use crate::{gdt, halt, println};
+use crate::{gdt, halt, print, println, serial_print, serial_println, task::clock::tick};
 use pic8259::ChainedPics;
 use spin::Mutex;
 use x86_64::{
+    instructions::port::Port,
     registers::control::Cr2,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
@@ -25,6 +26,7 @@ lazy_static! {
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt);
         idt.page_fault.set_handler_fn(page_fault);
         idt.overflow.set_handler_fn(overflow);
+        idt[InterruptIndex::RTC.as_usize()].set_handler_fn(rtc_interrupt);
         idt
     };
 }
@@ -37,16 +39,17 @@ extern "x86-interrupt" fn overflow(stack_frame: InterruptStackFrame) {
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = PIC1_OFFSET,
-    Keyboard,
+    Keyboard = PIC1_OFFSET + 1,
+    RTC = PIC1_OFFSET + 8,
 }
 
 impl InterruptIndex {
-    fn as_u8(self) -> u8 {
+    pub const fn as_u8(self) -> u8 {
         self as u8
     }
 
-    fn as_usize(self) -> usize {
-        usize::from(self.as_u8())
+    pub const fn as_usize(self) -> usize {
+        self.as_u8() as usize
     }
 }
 
@@ -79,6 +82,7 @@ extern "x86-interrupt" fn page_fault(
 }
 
 extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStackFrame) {
+    print!(".");
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -86,14 +90,25 @@ extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStackFrame) {
 }
 
 extern "x86-interrupt" fn keyboard_interrupt(_stack_frame: InterruptStackFrame) {
-    use x86_64::instructions::port::Port;
-
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
     crate::task::keyboard::add_scancode(scancode);
-
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn rtc_interrupt(_stack_frame: InterruptStackFrame) {
+    unsafe {
+        Port::new(0x70).write(0x8Cu8);
+        let u: u8 = Port::new(0x71).read();
+        if (u & (1 << 4 - 1)) == 0 {
+            tick();
+        }
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::RTC.as_u8());
+        }
     }
 }

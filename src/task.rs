@@ -5,6 +5,7 @@ use core::{
     sync::atomic::{AtomicU64, Ordering},
     task::{Context, Poll},
 };
+pub mod clock;
 pub mod executor;
 pub mod keyboard;
 

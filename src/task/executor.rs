@@ -1,8 +1,6 @@
-use crate::serial_println;
-
 use super::{Task, TaskId};
 use alloc::{collections::BTreeMap, sync::Arc, task::Wake};
-use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use core::task::{Context, Poll, Waker};
 use crossbeam_queue::ArrayQueue;
 
 struct TaskWaker {
@@ -11,6 +9,7 @@ struct TaskWaker {
 }
 
 impl TaskWaker {
+    #[allow(clippy::new_ret_no_self)]
     fn new(task_id: TaskId, task_queue: Arc<ArrayQueue<TaskId>>) -> Waker {
         Waker::from(Arc::new(TaskWaker {
             task_id,
@@ -74,7 +73,7 @@ impl Executor {
     }
 
     fn run_ready_tasks(&mut self) {
-        while let Ok(task_id) = self.task_queue.pop() {
+        while let Some(task_id) = self.task_queue.pop() {
             let task = match self.tasks.get_mut(&task_id) {
                 Some(task) => task,
                 None => continue,
@@ -106,7 +105,7 @@ impl Executor {
     pub fn run(&mut self) -> ! {
         loop {
             self.run_ready_tasks();
-            while let Ok(task) = self.spawn_queue.pop() {
+            while let Some(task) = self.spawn_queue.pop() {
                 self.spawn(task)
             }
             self.sleep_if_idle();

@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 
-use crate::println;
+use crate::{halt, println};
 
 #[repr(C)]
 pub struct TCBInfo {
@@ -9,9 +9,7 @@ pub struct TCBInfo {
 
 impl TCBInfo {
     pub fn new(stack_pointer: usize) -> TCBInfo {
-        TCBInfo {
-            stack_pointer: stack_pointer,
-        }
+        TCBInfo { stack_pointer }
     }
 }
 
@@ -44,9 +42,9 @@ impl TCBImpl {
         let stack_ptr_start = stack_ptr_as_usize + ((index - 1) * core::mem::size_of::<usize>());
         let tcb_info = TCBInfo::new(stack_ptr_start);
         TCBImpl {
-            tcb_info: tcb_info,
-            stack: stack,
-            work: Some(Box::new(work)),
+            tcb_info,
+            stack,
+            work: Some(box work),
         }
     }
 }
@@ -69,15 +67,17 @@ extern "C" {
     fn context_switch(current: *mut TCBInfo, next: *mut TCBInfo);
 }
 pub fn context_switch_test() {
-    let mut test1 = Box::new(TCBImpl::new(Box::new(move || ())));
-    let mut test2 = Box::new(TCBImpl::new(Box::new(move || ())));
+    let mut test1 = box TCBImpl::new(box move || ());
+    let mut test2 = box TCBImpl::new(box move || ());
+    x86_64::instructions::interrupts::disable();
     unsafe {
         context_switch(test1.get_info(), test2.get_info());
     }
+    x86_64::instructions::interrupts::enable();
 }
 
 #[no_mangle]
 pub extern "C" fn thread_entry_point() -> ! {
     println!("Thread made it to entry point!");
-    loop {}
+    halt()
 }

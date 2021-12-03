@@ -5,25 +5,39 @@
 #![feature(custom_test_frameworks)]
 #![feature(alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
+#![feature(asm)]
+#![feature(naked_functions)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![allow(clippy::new_without_default)]
+
 #[macro_use]
 extern crate lazy_static;
 extern crate alloc;
+
 pub mod allocator;
+pub mod clock;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod scheduler;
 pub mod serial;
 pub mod task;
 pub mod thread;
+pub mod userspace;
 pub mod vga;
+
 use core::panic::PanicInfo;
 
 pub fn init() {
     gdt::init();
     interrupts::init_idt();
-    unsafe { interrupts::PICS.lock().initialize() };
+    unsafe {
+        let mut pics = interrupts::PICS.lock();
+        pics.initialize();
+        pics.write_masks(0, 0);
+    };
+    clock::init();
     x86_64::instructions::interrupts::enable();
 }
 

@@ -5,7 +5,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-use crossbeam_queue::{ArrayQueue, PopError};
+use crossbeam_queue::ArrayQueue;
 use futures_util::stream::StreamExt;
 use futures_util::{task::AtomicWaker, Stream};
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
@@ -32,25 +32,25 @@ impl Stream for ScancodeStream {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let queue = SCANCODE_QUEUE.try_get().expect("Not initialized");
 
-        if let Ok(scancode) = queue.pop() {
+        if let Some(scancode) = queue.pop() {
             return Poll::Ready(Some(scancode));
         }
 
-        WAKER.register(&cx.waker());
+        WAKER.register(cx.waker());
         match queue.pop() {
-            Ok(scancode) => {
+            Some(scancode) => {
                 WAKER.take();
                 Poll::Ready(Some(scancode))
             }
-            Err(PopError) => Poll::Pending,
+            None => Poll::Pending,
         }
     }
 }
 
 pub(crate) fn add_scancode(scancode: u8) {
     if let Ok(queue) = SCANCODE_QUEUE.try_get() {
-        if let Err(_) = queue.push(scancode) {
-            println!("WARNING: scancode queue full")
+        if let Err(e) = queue.push(scancode) {
+            println!("WARNING: scancode queue full {:?}", e)
         } else {
             WAKER.wake()
         }
@@ -61,7 +61,11 @@ pub(crate) fn add_scancode(scancode: u8) {
 
 pub async fn print_keypresses() {
     let mut scancodes = ScancodeStream::new();
-    let mut keyboard = Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore);
+    let mut keyboard = Keyboard::new(
+        layouts::Us104Key,
+        ScancodeSet1,
+        HandleControl::MapLettersToUnicode,
+    );
 
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
